@@ -1,12 +1,16 @@
-function SCHUFFLE_INDEX = uniqueShuffle2(N_SHUFFLE, NB_WIN, BINARY_OUTPUT)
-% function  SCHUFFLE_INDEX = uniqueShuffle2(N_SHUFFLE, NB_WIN, BINARY_OUTPUT)
+function [S1,S2] = uniqueShuffle2(N_SHUFFLE, NB_WIN, BINARY_OUTPUT)
+% function  [S1,S2] = uniqueShuffle2(N_SHUFFLE, NB_WIN, BINARY_OUTPUT)
 %
 % ************************************************************************
-% This function return a random permutation matrix of size 
+% This function return two random permutation matrices of size 
 % (N_SHUFFLE,NB_WIN) with only unique rows filled with random indexes 
-% in range [1->NB_WIN].
-% Main purpose is to compute statistical permutation tests between two 
-% vectors of identical length NB_WIN.
+% in range [1->NB_WIN] and no identical indexes for each corresponding row.
+% e.g., case S1 = [ 1 2 3 ; 1 3 2] and S2 = [ 3 2 1 ; 2 1 3] is forbidden
+% due to value 2 in first row.
+%
+% Main purpose is to create surrogate data from two vectors of identical 
+% length NB_WIN. These vectors can be for example trial indexes in some
+% experiment.
 %
 % 
 %
@@ -22,34 +26,36 @@ function SCHUFFLE_INDEX = uniqueShuffle2(N_SHUFFLE, NB_WIN, BINARY_OUTPUT)
 %
 % History:
 % --------
-% *** 2012-01-14
+% *** 2012-01-14, update on 2016-05-14 to add a second output index
 % Created by J.Chatel-Goldman @GIPSA Lab, jonas.chatel.goldman(at)gmail.com
+
 
 
 if (nargin<3)||isempty(BINARY_OUTPUT)
    BINARY_OUTPUT = 0; 
 end
 
+% create the first shuffle index
 if(N_SHUFFLE > (2^NB_WIN))
     error(['Requested number of permutations exceed max possible perm with ' int2str(NB_WIN) ' time windows']);
 % handle the particular case where all possible different permutations must be found
 elseif (N_SHUFFLE == (2^NB_WIN))
-    SCHUFFLE_INDEX = dec2bin(0:(2^NB_WIN)-1);   
+    S1 = dec2bin(0:(2^NB_WIN)-1);   
 else 
-    SCHUFFLE_INDEX      = zeros(N_SHUFFLE,NB_WIN);
-    SCHUFFLE_INDEX(1,:) = randperm(NB_WIN); 
+    S1      = zeros(N_SHUFFLE,NB_WIN);
+    S1(1,:) = randperm(NB_WIN); 
     for p_ix = 2:N_SHUFFLE
     %         disp(['progress: ' int2str(100*p_ix/NB_WIN) '%'])
         allUnique = false;
         while(~allUnique) 
             % create random vector with unique values
-            SCHUFFLE_INDEX(p_ix,:) = randperm(NB_WIN); 
+            S1(p_ix,:) = randperm(NB_WIN); 
 
-            % reiterate until this vector is unique within SCHUFFLE_INDEX
+            % reiterate until this vector is unique within S1
             sameShuff_prev = false(1,NB_WIN);
             sameShuff_prev(1:p_ix-1) = true;
             for win_ix = 1:NB_WIN
-                sameShuff_curr = (SCHUFFLE_INDEX(sameShuff_prev,win_ix) == SCHUFFLE_INDEX(p_ix,win_ix));
+                sameShuff_curr = (S1(sameShuff_prev,win_ix) == S1(p_ix,win_ix));
                 if ~any(sameShuff_curr)
                     allUnique = true;
                     break;
@@ -60,6 +66,22 @@ else
     end
 end
 
+% create the second shuffle index, for which each corresponding row must
+% have different corresponding indexes, 
+allUnique = false;
+while(~allUnique) 
+    % create vector of N_SHUFFLE random index offsets
+    offset = randi(NB_WIN,[N_SHUFFLE 1]);
+    % add it to S1 to create S2
+    S2 = mod(S1+repmat(offset,[1 NB_WIN]),NB_WIN)+1;
+    % check that all rows are unique (extremly low probability, but still...)
+    C = unique(S2,'rows');
+    if(size(C,1)==N_SHUFFLE)
+        allUnique = true;
+    end
+end
+
 if BINARY_OUTPUT
-    SCHUFFLE_INDEX = SCHUFFLE_INDEX > NB_WIN/2; % set half of random shuffling values to zero, and half to one.
+    S1 = S1 > NB_WIN/2; % set half of random shuffling values to zero, and half to one.
+    S2 = S2 > NB_WIN/2; % set half of random shuffling values to zero, and half to one.
 end

@@ -179,8 +179,8 @@ function redraw_cb(h, win_sel)
         set(gca,'YTickLabel',LABELS(end:-1:1)),
     else
         set(gca,'YTickMode','auto','YTickLabelMode','auto'),
-        scaled_labels = str2num(get(gca,'YTickLabel'))/amp_scale;
-        set(gca,'YTickLabel',num2str(scaled_labels))   % correct Ylabel with current amplitude scale
+%         scaled_labels = str2num(get(gca,'YTickLabel'))/amp_scale;
+%         set(gca,'YTickLabel',num2str(scaled_labels))   % correct Ylabel with current amplitude scale
         legend(LABELS,'Location','BestOutside'),
         line(get(gca,'XLim'),[0 0],'color',[.7 .7 .7],'LineWidth', .5,'LineStyle',':'),
         ylabel(YLABEL),

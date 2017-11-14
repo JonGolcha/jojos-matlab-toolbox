@@ -1,5 +1,5 @@
 function [h_out,p_out] = pairedPermTest(x,y,alpha,nbPerms)
-% function  [h,p] = pairedPermTest(x,y,alpha,nbPerms)
+% function  [h_out,p_out] = pairedPermTest(x,y,alpha,nbPerms)
 %
 % ************************************************************************
 % Perform paired-sample statistical testing using randomization procedure.
@@ -8,14 +8,16 @@ function [h_out,p_out] = pairedPermTest(x,y,alpha,nbPerms)
 %
 % Input:
 % ------
-% x,y           --> vectors of paired observations with same lengths (1,N)
-%                   can also be matrices of size (M,N), in which case M 
+% x,y           --> vectors of paired observations with same lengths (N,1)
+%                   can also be matrices of size (N,M), in which case M 
 %                   separate tests are performed along each column of x,y 
 %                   and a vector of results is returned.
 % alpha     	--> (optional) significance level, (must be >= 2^-N)
-% nbPerms     	--> (optional) performs either systematic or random data permutation
+% nbPerms     	--> (optional) performs either systematic or random data
+%                   permutation:
 %                   'all': compute all permutations (2^N), or
-%                	scalar: compute a random subset only, must be: (1/alpha < scalar < 2^N) 
+%                	scalar: compute a random subset only, must be: (1/alpha
+%                	< scalar < 2^N)
 %
 % Output:
 % -------
@@ -25,15 +27,29 @@ function [h_out,p_out] = pairedPermTest(x,y,alpha,nbPerms)
 % --------
 % *** 2013-06-12
 % Created by J.Chatel-Goldman @GIPSA Lab, jonas.chatel.goldman(at)gmail.com
+%
+% ADDITIONAL EXPLANATION NOTE (from EEGlab wiki!)
+% We do not compute the mean condition difference, but its t-value (the 
+% mean difference divided by the standard deviation of the difference and 
+% multiplied by the square root of the number of observations less one).
+% The result is equivalent to using the mean difference. The advantage is
+% that when we have more conditions, we can use the comparable ANOVA
+% measure. Computing the probability density distribution of the t-test or
+% ANOVA is only a "trick" to be able to obtain a difference measure across
+% all subjects and conditions. It has nothing to do with relying on a
+% parametric t-test or ANOVA model, which assume underlying gaussian value
+% distributions. Note that only measures that are well-behaved (e.g., are
+% not strongly non-linearly related) should be processed by this kind of
+% non-parametric testing.
 
 
 % -- assess inputs
-if(size(x,2) == 1)
+if(size(x,1) == 1)
     x = x';
     y = y';
 end
-N       = size(x,2);
-nbTests = size(x,1);
+N       = size(x,1);
+nbTests = size(x,2);
 if (nargin<3) || (isempty(alpha))
     alpha = .05;
 end
@@ -60,13 +76,19 @@ permMat = uniqueShuffle2(nbPerms,N,1);  % permutation matrix used to shuffle obs
 
 
 % -- Perform paired t-test for OBSERVATION SET
-[h_obs,p_obs] = ttest(x,y);
+[h_obs,p_obs,ci,stats] = ttest(x,y);
+tval_obs = stats.tstat;
 
 % -- Perform paired t-test for PERMUTATION SET
 perm_set1   = zeros(N,nbTests);
 perm_set2   = zeros(N,nbTests);
-p_perm      = zeros(nbPerms,nbTests);
+tval_perm	= zeros(nbPerms,nbTests);
 for perm_ix = 1:nbPerms
+    % user feedback
+    if ~mod(100*perm_ix/nbPerms,10)
+        disp(['paired-sample statistical testing... ' int2str(100*perm_ix/nbPerms) '%']);
+    end
+    
     % draw specific permutation using 'permMat' logical indexes
     if(nbTests == 1)
         perm_set1(permMat(perm_ix,:))  = x(permMat(perm_ix,:));
@@ -80,16 +102,17 @@ for perm_ix = 1:nbPerms
         perm_set2(permMat(perm_ix,:),:)  = y(permMat(perm_ix,:),:);
     end
     % compute t-test on this permutation
-    [h_temp,p_perm(perm_ix,:)] = ttest(perm_set1,perm_set2);
+    [h_temp,p_temp,ci,stats] = ttest(perm_set1,perm_set2);
+    tval_perm(perm_ix,:) = stats.tstat;
 end
 
 % -- Process significance level from permutation values
-p_out   = zeros(1,nbTests);
-p_perm  = sort(p_perm,1,'ascend');
+p_out       = zeros(1,nbTests);
+tval_perm   = sort(tval_perm,1,'ascend');
 for test_ix = 1:nbTests
-    p_out(test_ix) = (1/nbPerms)*length(find(p_perm(:,test_ix) < p_obs(test_ix)));
+    p_out(test_ix) = (1/nbPerms)*length(find(tval_perm(:,test_ix) < tval_obs(test_ix)));
     if(p_out(test_ix)==0)
-        p_out(test_ix) = 1/nbPerms;     % case when no permutation gives lower p value than observation
+        p_out(test_ix) = 1/nbPerms;     % case when no permutation gives lower p value than observation: put to minimum sensitivity
     end;
 end    
 h_out = (p_out <= alpha);
@@ -165,3 +188,18 @@ end
 
 
 end
+
+
+
+%% TRASH
+% trying to consider NaN values
+% if find(isnan(x)) || find(isnan(y))
+%     try 
+%         [h_obs,p_obs,ci,stats] = ttest2(x,y);
+%     catch
+%         error('data has NaN values, therefore we need the statistics and machine learning toolbox!');
+%     end
+% else
+%     [h_obs,p_obs,ci,stats] = ttest(x,y);
+% end
+% tval_obs = stats.tstat;
